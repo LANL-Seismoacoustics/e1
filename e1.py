@@ -4,10 +4,8 @@ import sysconfig
 
 import numpy as np
 
-# C libraries
 ext, = sysconfig.get_config_vars('SO')
-libecomp = C.CDLL(os.path.dirname(__file__) + '/lib/libe1' + ext)
-
+libecomp = C.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
 
 STATUS_CODE = {
     0: 'EC_SUCCESS',
@@ -20,6 +18,7 @@ STATUS_CODE = {
     7: 'EC_TYPE_ERROR',
     8: 'EC_MEMORY_ERROR',
 }
+
 
 def e_compression(DATAFILE, BYTEOFFSET, NUM):
     """Wrapper to e1 decompression routine.
@@ -59,14 +58,6 @@ def e_compression(DATAFILE, BYTEOFFSET, NUM):
     e1 decompression C library is written by Richard Stead, LANL.
 
     """
-    # int32_t
-    # e_decomp_inplace(int32_t *in, int32_t insamp, int32_t inbyte, int32_t out0,
-    #   int32_t outsamp)
-    # libecomp.e_decomp_inplace.restype = C.c_int
-
-    # int32_t
-    # e_decomp(uint32_t *in, int32_t *out, int32_t insamp, int32_t inbyte,
-    #  int32_t out0, int32_t outsamp)
     libecomp.e_decomp.restype = C.c_int
 
     # open file, query size, jump to offset
