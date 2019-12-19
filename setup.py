@@ -28,6 +28,6 @@ setup(name='e1',
       install_requires=['numpy'],
       py_modules=['e1'],
       ext_modules=[Extension('_libe1', ['src/e_compression.c'])],
-      license='LANL-MIT',
+      license='MIT',
       platforms=['Mac OS X', 'Linux/Unix'],
 )
