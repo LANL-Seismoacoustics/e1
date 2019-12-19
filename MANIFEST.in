@@ -1,1 +1,2 @@
 include src/e_compression.h
+include LICENSE.txt
