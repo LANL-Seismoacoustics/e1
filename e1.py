@@ -1,3 +1,7 @@
+"""
+e1 : Python support for the e1 compression format
+
+"""
 import ctypes as C
 import os
 import sysconfig
@@ -6,6 +10,7 @@ import numpy as np
 
 ext, = sysconfig.get_config_vars('SO')
 libecomp = C.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
+libecomp.e_decomp.restype = C.c_int
 
 STATUS_CODE = {
     0: 'EC_SUCCESS',
@@ -18,6 +23,47 @@ STATUS_CODE = {
     7: 'EC_TYPE_ERROR',
     8: 'EC_MEMORY_ERROR',
 }
+
+
+def decompress(buff, count):
+    """
+    Decompress count values from a bytes buffer
+
+    Parameters
+    ----------
+    buff : bytes
+    count : int
+        Number of expected values in the buffer.
+
+    Returns
+    -------
+    data : numpy.ndarray (rank 1) of int32
+    status : int
+        Status code from the decompression C function.
+
+    """
+
+    flen = len(buff)
+    w = np.frombuffer(buff, dtype=np.int32)
+    Y = np.zeros(count, dtype=np.int32, order='C')
+    status = libecomp.e_decomp(w.ctypes.data_as(C.POINTER(C.c_uint32)),
+                               Y.ctypes.data_as(C.POINTER(C.c_int32)), count,
+                               flen, 0, count)
+
+    return Y, status
+
+
+def decompress_file(fobj, count):
+    foff = fobj.tell()
+    flen = fobj.seek(0, os.SEEK_END)
+    fobj.seek(foff)
+    flen -= foff # number of bytes left in file
+    # read 5 times the number of expected samples, or the remaining bytes in file
+    flen = 5 * count if flen > 5 * count else flen
+    # read a conservatively-large buffer of flen 4-byte values
+    byts = fobj.read(flen * 4)
+
+    return decompress(byts, count)
 
 
 def e_compression(DATAFILE, BYTEOFFSET, NUM):
@@ -78,14 +124,8 @@ def e_compression(DATAFILE, BYTEOFFSET, NUM):
 
     Y = np.zeros(NUM, dtype=np.int32, order='C')
 
-    # library call
-    # replaces the first NUM values in w with decompressed values
-    # retval = libecomp.e_decomp_inplace(w.ctypes.data_as(C.POINTER(C.c_int32)),
-    #                                   NUM, flen, 0, NUM)
     retval = libecomp.e_decomp(w.ctypes.data_as(C.POINTER(C.c_uint32)),
                                Y.ctypes.data_as(C.POINTER(C.c_int32)), NUM,
                                flen, 0, NUM)
 
-    # return w[0:NUM].copy(), retval
-    # return w.copy(), retval
     return Y
