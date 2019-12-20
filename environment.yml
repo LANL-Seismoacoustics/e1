@@ -1,0 +1,7 @@
+name: e1
+channels:
+- defaults
+dependencies:
+- python=3
+- numpy
+- pytest
