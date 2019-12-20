@@ -2,6 +2,8 @@
 
 Python support for the e1 seismic compression format.
 
+"e1" is a variable-length compression algorithm for int32 data.
+
 
 ## Installation
 
@@ -11,6 +13,8 @@ pip install e1
 
 ## Usage
 
+### Decompress data from a file
+
 ```python
 import e1
 
@@ -18,6 +22,22 @@ file_name = 'some_file.w'
 byte_offset = 0
 nsamples = 1000
 
-data = e1.e_compression(file_name, byte_offset, nsamples)
+with open(file_name, 'rb') as f:
+    f.seek(byte_offset)
+    data = e1.decompress_file(f, nsamples)
 
+```
+
+### Decompress raw bytes
+
+```python
+with open(file_name, 'rb') as f:
+    # Read 5 times as many bytes as you expecte from nsamples x 4-byte values,
+    # just to make sure all your nsamples are in it.  Though it may be more data
+    # than you need, this gaurds against poorly-compressed data.  
+    # In e1, you don't know a priori how many bytes it took to compress your data.
+    nbytes = 5 * nsamples * 4
+    byts = f.read(nbytes)
+
+data = decompress(byts, nsamples)
 ```
