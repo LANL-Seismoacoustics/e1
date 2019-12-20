@@ -9,7 +9,6 @@ before_script:
  - conda env create -f environment.yml
  - source activate e1
  - pip install .
- - ls -la /builds/ees-geophysics/e1/
 
 tests:
   stage: test
