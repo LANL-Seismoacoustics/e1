@@ -38,25 +38,33 @@ def decompress(buff, count):
     Returns
     -------
     data : numpy.ndarray (rank 1) of int32
-    status : int
-        Status code from the decompression C function.
+
+    Raises
+    ------
+    Exception
+        Error code from decompression library.
 
     """
-
-    flen = len(buff)
-    w = np.frombuffer(buff, dtype=np.int32)
+    flen = len(buff) # number of bytes in buffer
+    w = np.frombuffer(buff, dtype=np.int32) # read them all into 4byte integers
+    # make an empty array to hold decompressed values
     Y = np.zeros(count, dtype=np.int32, order='C')
+    # decompress into output array
     status = libecomp.e_decomp(w.ctypes.data_as(C.POINTER(C.c_uint32)),
                                Y.ctypes.data_as(C.POINTER(C.c_int32)), count,
                                flen, 0, count)
 
-    return Y, status
+    if status != 0:
+        msg = "e1 decompression error: {}".format(STATUS_CODE[status])
+        raise Exception(msg)
+
+    return Y
 
 
 def decompress_file(fobj, count):
-    foff = fobj.tell()
-    flen = fobj.seek(0, os.SEEK_END)
-    fobj.seek(foff)
+    foff = fobj.tell() # record the incoming byte offest
+    flen = fobj.seek(0, os.SEEK_END) # get total file size
+    fobj.seek(foff) # go back to the incoming offset
     flen -= foff # number of bytes left in file
     # read 5 times the number of expected samples, or the remaining bytes in file
     flen = 5 * count if flen > 5 * count else flen
@@ -67,7 +75,7 @@ def decompress_file(fobj, count):
 
 
 def e_compression(DATAFILE, BYTEOFFSET, NUM):
-    """Wrapper to e1 decompression routine.
+    """Legacy wrapper to e1 decompression routine.
 
     Parameters
     ----------
