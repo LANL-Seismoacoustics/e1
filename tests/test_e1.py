@@ -34,10 +34,8 @@ e1file = io.BytesIO(e1byts)
 def test_decompress():
     observed = e1.decompress(e1byts, count)
     np.testing.assert_array_equal(observed, expected)
-    assert status == 0
 
 
 def test_decompress_file():
     observed = e1.decompress_file(e1file, count)
     np.testing.assert_array_equal(observed, expected)
-    assert status == 0
