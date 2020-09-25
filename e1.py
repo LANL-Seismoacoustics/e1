@@ -8,8 +8,9 @@ import sysconfig
 
 import numpy as np
 
-ext, = sysconfig.get_config_vars('SO')
-libecomp = C.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
+ext, = sysconfig.get_config_vars('SO') # something like '.cpython-38-darwin.so'
+filename = os.path.dirname(__file__) + os.path.sep + 'libe1' + ext
+libecomp = C.CDLL(filename)
 libecomp.e_decomp.restype = C.c_int
 
 STATUS_CODE = {

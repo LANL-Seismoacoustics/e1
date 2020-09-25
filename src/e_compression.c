@@ -66,13 +66,13 @@
 
 /* Python C extensions for Windows expects the symbol initModuleName when building the library.
 * This declaration gives msvc compiler this symbol to compile correctly.
-* Note : This not the documented way to build C extensions for Windows. It is typically expected to
+* Note : This is not the documented way to build C extensions for Windows. It is typically expected to
 * use wrapper methods. What this does is prevents a statement such as 'import libecompression' in Python.
 * Instead, the only way to load the library is through a ctypes.CDLL call. Which in this case, is all that
-* is needed as seen in readwaveform.py.
+* is needed as seen in e1.py.
 */
 #ifdef _WIN32
-void initlibecompression(){}
+void PyInit_e_compression(){}
 #endif
 
 /*

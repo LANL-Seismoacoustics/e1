@@ -27,7 +27,7 @@ setup(name='e1',
       keywords=['seismology', 'geophysics'],
       install_requires=['numpy'],
       py_modules=['e1'],
-      ext_modules=[Extension('_libe1', ['src/e_compression.c'])],
+      ext_modules=[Extension('libe1', ['src/e_compression.c'])],
       license='MIT',
       platforms=['Mac OS X', 'Linux/Unix'],
 )
