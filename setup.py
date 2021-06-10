@@ -16,7 +16,7 @@ with open('README.md') as readme:
 doclines = __doc__.split("\n")
 
 setup(name='e1',
-      version='0.1.1',
+      version='0.1.2',
       description='Python support for the e1 compression format.',
       long_description=long_description,
       long_description_content_type="text/markdown", # setuptools >= 38.6.0

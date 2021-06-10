@@ -4,11 +4,11 @@ e1 : Python support for the e1 compression format
 """
 import ctypes as C
 import os
-import sysconfig
+import importlib.machinery
 
 import numpy as np
 
-ext, = sysconfig.get_config_vars('SO')
+ext = importlib.machinery.EXTENSION_SUFFIXES[0]
 libecomp = C.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
 libecomp.e_decomp.restype = C.c_int
 
