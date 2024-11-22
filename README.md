@@ -7,8 +7,18 @@ Python support for the e1 seismic compression format.
 
 ## Installation
 
+### PyPI
+
 ```python
 pip install e1
+```
+
+### Conda-Forge
+
+**New**: now in Conda-Forge, thanks to @jcox10!
+
+```python
+conda install -c conda-forge e1
 ```
 
 ## Usage
