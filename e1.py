@@ -2,28 +2,56 @@
 e1 : Python support for the e1 compression format
 
 """
-import ctypes as C
+import ctypes
+from enum import IntEnum
 import os
 import importlib.machinery
 
 import numpy as np
 
 ext = importlib.machinery.EXTENSION_SUFFIXES[0]
-libecomp = C.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
-libecomp.e_decomp.restype = C.c_int
+libecomp = ctypes.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
+libecomp.e_decomp.restype = ctypes.c_int
 
-STATUS_CODE = {
-    0: 'EC_SUCCESS',
-    1: 'EC_FAILED',
-    2: 'EC_LENGTH_ERROR',
-    3: 'EC_SAMP_ERROR',
-    4: 'EC_DIFF_ERROR',
-    5: 'EC_CHECK_ERROR',
-    6: 'EC_ARG_ERROR',
-    7: 'EC_TYPE_ERROR',
-    8: 'EC_MEMORY_ERROR',
-}
+libecomp.e_comp.argtypes = [
+    ctypes.POINTER(ctypes.c_int32),
+    ctypes.POINTER(ctypes.c_uint32),
+    ctypes.c_int32,
+    ctypes.POINTER(ctypes.c_int32),
+    ctypes.c_char*2,
+    ctypes.c_int32
+]
+libecomp.e_comp.restype = ctypes.c_int
+    # int32_t e_comp(int32_t *in,
+    #                uint32_t *out,
+    #                int32_t insamp,
+    #                int32_t *outbytes,
+    #                char datatype[],
+    #                int32_t block_flag) {
 
+
+class ECStatus(IntEnum):
+    EC_SUCCESS = 0
+    EC_FAILED = 1
+    EC_LENGTH_ERROR = 2
+    EC_SAMP_ERROR = 3
+    EC_DIFF_ERROR = 4
+    EC_CHECK_ERROR = 5
+    EC_ARG_ERROR = 6
+    EC_TYPE_ERROR = 7
+    EC_MEMORY_ERROR = 8
+
+E_MESSAGES = [
+    "operation succeeded",
+    "operation failed",
+    "number of bytes in data incorrect",
+    "number of samples in data incorrect",
+    "error in number of differences",
+    "check value (last sample in block) incorrect",
+    "error in arguments to function",
+    "datatype incorrect",
+    "memory allocation error",
+    ]
 
 def decompress(buff, count):
     """
@@ -50,15 +78,49 @@ def decompress(buff, count):
     # make an empty array to hold decompressed values
     Y = np.zeros(count, dtype=np.int32, order='C')
     # decompress into output array
-    status = libecomp.e_decomp(w.ctypes.data_as(C.POINTER(C.c_uint32)),
-                               Y.ctypes.data_as(C.POINTER(C.c_int32)), count,
+    # int32_t e_decomp(uint32_t *in,
+    #                  int32_t *out,
+    #                  int32_t insamp,
+    #                  int32_t inbyte, int32_t out0,
+    #                  int32_t outsamp) {
+    status = libecomp.e_decomp(w.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
+                               Y.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)), count,
                                flen, 0, count)
 
-    if status != 0:
-        msg = "e1 decompression error: {}".format(STATUS_CODE[status])
+    if status != ECStatus.EC_SUCCESS:
+        msg = "e1 decompression error: {} {!r}".format(E_MESSAGES[status], ECStatus(status))
         raise Exception(msg)
 
     return Y
+
+
+def compress(data, block_flag=1):
+    count = len(data)
+    nbytes_in = data.nbytes
+    bytes_out = ctypes.create_string_buffer(nbytes_in) # null-terminated bytes output buffer, max possible size (no compression)
+
+    # int32_t e_comp(int32_t *in,
+    #                uint32_t *out,
+    #                int32_t insamp,
+    #                int32_t *outbytes,
+    #                char datatype[],
+    #                int32_t block_flag) {
+    nbytes_out_p = ctypes.POINTER(ctypes.c_int32)() # null pointer to int32
+    datatype = (ctypes.c_char*2)() # 2-character stack-allocated string array
+    datatype.value = b'e1'
+    status = libecomp.e_comp(
+        data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
+        ctypes.cast(bytes_out, ctypes.POINTER(ctypes.c_uint32)),
+        count, #cyptes sends this as a c int automatically?
+        nbytes_out_p,
+        datatype,
+        block_flag
+    )
+    if status != ECStatus.EC_SUCCESS:
+        msg = "e1 decompression error: {} {!r}".format(E_MESSAGES[status], ECStatus(status))
+        raise Exception(msg)
+
+    return bytes_out[:nbytes_out_p.contents]
 
 
 def decompress_file(fobj, count):
@@ -76,7 +138,7 @@ def decompress_file(fobj, count):
 
 def e_compression(DATAFILE, BYTEOFFSET, NUM):
     """Legacy wrapper to e1 decompression routine.
-
+    
     Parameters
     ----------
     DATAFILE: string
@@ -112,7 +174,7 @@ def e_compression(DATAFILE, BYTEOFFSET, NUM):
     e1 decompression C library is written by Richard Stead, LANL.
 
     """
-    libecomp.e_decomp.restype = C.c_int
+    libecomp.e_decomp.restype = ctypes.c_int
 
     # open file, query size, jump to offset
     f = open(DATAFILE, 'rb')
@@ -132,8 +194,8 @@ def e_compression(DATAFILE, BYTEOFFSET, NUM):
 
     Y = np.zeros(NUM, dtype=np.int32, order='C')
 
-    retval = libecomp.e_decomp(w.ctypes.data_as(C.POINTER(C.c_uint32)),
-                               Y.ctypes.data_as(C.POINTER(C.c_int32)), NUM,
+    retval = libecomp.e_decomp(w.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
+                               Y.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)), NUM,
                                flen, 0, NUM)
 
     return Y
