@@ -3,7 +3,7 @@ import numpy as np
 import e1
 
 # e1 byte string for 400 bytes = 5 x 20 samples x 4 bytes per sample
-e1byts = (b'\x00H\x00<\x02\x00\x00\xc3\x93[\x8b\xed\xc0\x08L\xf9\xcc^\xc1\x04\xcf'
+e1bytes = (b'\x00H\x00<\x02\x00\x00\xc3\x93[\x8b\xed\xc0\x08L\xf9\xcc^\xc1\x04\xcf'
           b'\xd8\xf8\x9a\xc4\xdb1r\xce\x84A\xe6\xcdC\xba\xf1\xc4\x82\xf4\xfc\xc2'
           b'\xdf\xc5\x8d\xc0D\x00\x8b\xcd\x98\x8d\x89\xce\x1e\xc8\x97\xcd\xdeCz'
           b'\xc0@\xc3w\xc0%Am\xff\xff\xff\xdb\x00H\x00<\x02\x00\x02\n\xd1\xfd\xdeO'
@@ -23,19 +23,27 @@ e1byts = (b'\x00H\x00<\x02\x00\x00\xc3\x93[\x8b\xed\xc0\x08L\xf9\xcc^\xc1\x04\xc
           b'\x9e?\xf7\xc0\xe1w\x07\xc0\x98\xbd\xf3\xce\xc4\x83\x8f\xce\xfd\x00\xf1'
           b'\xcf\x83\xfbv\xc06\x80\x87\xcd\xa5J\x84\xc2?;!\xc4e\x80\x85')
 
-expected = np.array([309, 332, 336, 340, 377, 439, 494, 519, 539, 561, 587,
-                     611, 606, 586, 592, 636, 660, 654, 634, 602], dtype=np.int32)
+# corresponding data for the compressed bytes above
+e1data = np.array([309, 332, 336, 340, 377, 439, 494, 519, 539, 561, 587,
+                   611, 606, 586, 592, 636, 660, 654, 634, 602], dtype=np.int32)
 
-count = len(expected)
+count = len(e1data)
 
-e1file = io.BytesIO(e1byts)
-
+e1file = io.BytesIO(e1bytes)
 
 def test_decompress():
-    observed = e1.decompress(e1byts, count)
-    np.testing.assert_array_equal(observed, expected)
+    observed = e1.decompress(e1bytes, count)
+    np.testing.assert_array_equal(observed, e1data)
 
 
 def test_decompress_file():
     observed = e1.decompress_file(e1file, count)
-    np.testing.assert_array_equal(observed, expected)
+    np.testing.assert_array_equal(observed, e1data)
+
+def test_compress():
+    observed = e1.compress(e1data)
+    assert observed == e1bytes
+
+
+def test_compress_file():
+    pass
