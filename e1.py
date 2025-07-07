@@ -5,6 +5,7 @@ e1 : Python support for the e1 compression format
 import ctypes
 from enum import IntEnum
 import os
+from math import ceil
 import importlib.machinery
 
 import numpy as np
@@ -54,8 +55,7 @@ E_MESSAGES = [
     ]
 
 def decompress(buff, count):
-    """
-    Decompress count values from a bytes buffer
+    """ Decompress count values from a bytes buffer
 
     Parameters
     ----------
@@ -94,33 +94,50 @@ def decompress(buff, count):
     return Y
 
 
-def compress(data, block_flag=1):
-    count = len(data)
-    nbytes_in = data.nbytes
-    bytes_out = ctypes.create_string_buffer(nbytes_in) # null-terminated bytes output buffer, max possible size (no compression)
+def compress(data):
+    """ Compress an int32 array. 
 
-    # int32_t e_comp(int32_t *in,
-    #                uint32_t *out,
-    #                int32_t insamp,
-    #                int32_t *outbytes,
-    #                char datatype[],
-    #                int32_t block_flag) {
-    nbytes_out_p = ctypes.POINTER(ctypes.c_int32)() # null pointer to int32
-    datatype = (ctypes.c_char*2)() # 2-character stack-allocated string array
-    datatype.value = b'e1'
+    Parameters
+    ----------
+    data : numpy.ndarray (rank 1) of type int32
+
+    Returns
+    -------
+    compressed : bytes
+        Compressed data.
+
+    """
+    # out_c = ctypes.create_string_buffer(data.nbytes) # null-terminated mutable bytes buffer, max possible size (no compression)
+    out = np.zeros(len(data), dtype='>u4', order='C') # big-endian unsigned int32 buffer array
+
+    # int32_t e_comp(int32_t *in, uint32_t *out, int32_t insamp, int32_t *outbytes, char datatype[], int32_t block_flag)
+    # int32_t e_comp(int32_t *in, 
+    #                uint32_t *out, 
+    #                int32_t insamp, 
+    #                int32_t *outbytes, 
+    #                char datatype[], 
+    #                int32_t block_flag)
+
+    # bytes_out_p = ctypes.POINTER(ctypes.c_uint32)() # null pointer to uint32
+    outbytes_p = ctypes.POINTER(ctypes.c_int32)(ctypes.c_int32(0)) # initialize output bytes pointer
+    datatype = ctypes.create_string_buffer(b'e1', 2)
     status = libecomp.e_comp(
         data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
-        ctypes.cast(bytes_out, ctypes.POINTER(ctypes.c_uint32)),
-        count, #cyptes sends this as a c int automatically?
-        nbytes_out_p,
+        out.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
+        # bytes_out.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
+        # ctypes.cast(bytes_out, ctypes.POINTER(ctypes.c_uint32)),
+        ctypes.c_int32(len(data)),
+        outbytes_p,
         datatype,
-        block_flag
+        1
     )
     if status != ECStatus.EC_SUCCESS:
         msg = "e1 decompression error: {} {!r}".format(E_MESSAGES[status], ECStatus(status))
         raise Exception(msg)
 
-    return bytes_out[:nbytes_out_p.contents]
+    print(out)
+    print(outbytes_p.contents.value)
+    return out.tobytes()[:outbytes_p.contents.value]
 
 
 def decompress_file(fobj, count):
