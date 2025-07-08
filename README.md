@@ -51,3 +51,11 @@ with open(file_name, 'rb') as f:
 
 data = decompress(byts, nsamples)
 ```
+
+### Compress a NumPy array to raw bytes
+
+```python
+byts = compress(data)
+
+print(f"Compression ratio: {data.nbyts / len(byts)})
+```
