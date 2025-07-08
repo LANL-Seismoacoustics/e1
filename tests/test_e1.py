@@ -36,7 +36,7 @@ def e1file():
 
 @pytest.fixture
 def e1file_padded():
-    with io.BytesIO(e1bytes+padding_bytes) as f:
+    with io.BytesIO(e1bytes + padding_bytes) as f:
         yield f
 
 
@@ -45,7 +45,7 @@ def test_decompress():
     np.testing.assert_array_equal(observed, e1data)
 
     # still works when extra bytes are present
-    observed = e1.decompress(e1bytes+padding_bytes, count)
+    observed = e1.decompress(e1bytes + padding_bytes, count)
     np.testing.assert_array_equal(observed, e1data)
 
 
