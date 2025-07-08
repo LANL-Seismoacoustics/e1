@@ -10,10 +10,9 @@ import importlib.machinery
 
 import numpy as np
 
+
 ext = importlib.machinery.EXTENSION_SUFFIXES[0]
 libecomp = ctypes.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
-
-
 
 class ECStatus(IntEnum):
     EC_SUCCESS = 0
@@ -75,11 +74,17 @@ def decompress(buff, count):
     # int32_t e_decomp(uint32_t *in,
     #                  int32_t *out,
     #                  int32_t insamp,
-    #                  int32_t inbyte, int32_t out0,
+    #                  int32_t inbyte, 
+    #                  int32_t out0,
     #                  int32_t outsamp) {
-    status = libecomp.e_decomp(w.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
-                               Y.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)), count,
-                               flen, 0, count)
+    status = libecomp.e_decomp(
+        w.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
+        Y.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
+        count,
+        flen,
+        0,
+        count
+    )
 
     if status != ECStatus.EC_SUCCESS:
         msg = "e1 decompression error: {} {!r}".format(E_MESSAGES[status], ECStatus(status))
@@ -143,6 +148,7 @@ def compress(data):
     outbytes = outbytes_ptr.contents.value
 
     return out_array.tobytes()[:outbytes]
+
 
 def decompress_file(fobj, count):
     foff = fobj.tell() # record the incoming byte offest
