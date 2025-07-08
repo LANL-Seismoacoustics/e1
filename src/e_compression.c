@@ -23,13 +23,13 @@
  * DEBUG 3 prints info at various places in various routines.  It also
  *   will print specific data on one block, again using ONEPACK.
  */
-
 #if defined DEBUG && (DEBUG == 1 || DEBUG == 3)
 #include <stdio.h>
 #endif
 
 #include <string.h>
 #include <stdlib.h>
+// #include<stdio.h>
 
 //Support for different OS
 #ifdef _WIN32
@@ -615,6 +615,12 @@ int32_t e_comp(int32_t *in,
   }
   else return EC_TYPE_ERROR;
   bufints = bufbytes / sizeof(int32_t) - 2;
+
+  // debugging so I can tell which problem it is
+  // if ( !in ) (void)fprintf(stderr, "%s", "!in\n");
+  // if ( !out ) (void)fprintf(stderr, "%s", "!out\n");
+  // if ( insamp <0 ) (void)fprintf(stderr, "%s", "instamp <= 0\n");
+  // if ( !outbytes ) (void)fprintf(stderr, "%s", "!outbytes\n");
 
   if (!in || !out || insamp <= 0 || !outbytes) return EC_ARG_ERROR;
 
