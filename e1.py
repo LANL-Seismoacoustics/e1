@@ -12,23 +12,7 @@ import numpy as np
 
 ext = importlib.machinery.EXTENSION_SUFFIXES[0]
 libecomp = ctypes.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
-libecomp.e_decomp.restype = ctypes.c_int
 
-libecomp.e_comp.argtypes = [
-    ctypes.POINTER(ctypes.c_int32),
-    ctypes.POINTER(ctypes.c_uint32),
-    ctypes.c_int32,
-    ctypes.POINTER(ctypes.c_int32),
-    ctypes.c_char*2,
-    ctypes.c_int32
-]
-libecomp.e_comp.restype = ctypes.c_int
-    # int32_t e_comp(int32_t *in,
-    #                uint32_t *out,
-    #                int32_t insamp,
-    #                int32_t *outbytes,
-    #                char datatype[],
-    #                int32_t block_flag) {
 
 
 class ECStatus(IntEnum):
@@ -53,6 +37,16 @@ E_MESSAGES = [
     "datatype incorrect",
     "memory allocation error",
     ]
+
+libecomp.e_decomp.argtypes = [
+    ctypes.POINTER(ctypes.c_uint32), # uint32_t *in
+    ctypes.POINTER(ctypes.c_int32), # int32_t *out
+    ctypes.c_int32, # int32_t insamp
+    ctypes.c_int32, # int32_t inbyte
+    ctypes.c_int32, # int32_t out0
+    ctypes.c_int32, # int32_t outsamp
+]
+libecomp.e_decomp.restype = ctypes.c_int
 
 def decompress(buff, count):
     """ Decompress count values from a bytes buffer
@@ -93,6 +87,16 @@ def decompress(buff, count):
 
     return Y
 
+
+libecomp.e_comp.argtypes = [
+    ctypes.POINTER(ctypes.c_int32), # int32_t *in
+    ctypes.POINTER(ctypes.c_uint32), # uint32_t *out
+    ctypes.c_int32, # int32_t insamp
+    ctypes.POINTER(ctypes.c_int32), # int32_t *outbytes
+    ctypes.c_char*2, # char datatype[]
+    ctypes.c_int32 # int32_t block_flag
+]
+libecomp.e_comp.restype = ctypes.c_int32  # int32_t
 
 def compress(data):
     """ Compress an int32 array. 
