@@ -2,10 +2,10 @@
 e1 : Python support for the e1 compression format
 
 """
+from typing import List, BinaryIO
 import ctypes
 from enum import IntEnum
 import os
-from math import ceil
 import importlib.machinery
 
 import numpy as np
@@ -25,7 +25,7 @@ class ECStatus(IntEnum):
     EC_TYPE_ERROR = 7
     EC_MEMORY_ERROR = 8
 
-E_MESSAGES = [
+E_MESSAGES: List[str] = [
     "operation succeeded",
     "operation failed",
     "number of bytes in data incorrect",
@@ -47,7 +47,7 @@ libecomp.e_decomp.argtypes = [
 ]
 libecomp.e_decomp.restype = ctypes.c_int
 
-def decompress(buff, count):
+def decompress(buff: bytes, count: int) -> np.ndarray:
     """ Decompress count values from a bytes buffer
 
     Parameters
@@ -101,7 +101,7 @@ libecomp.e_comp.argtypes = [
 ]
 libecomp.e_comp.restype = ctypes.c_int32  # int32_t
 
-def compress(data):
+def compress(data: np.ndarray) -> bytes:
     """ Compress an int32 array. 
 
     Parameters
@@ -147,7 +147,7 @@ def compress(data):
     return out_array.tobytes()[:outbytes]
 
 
-def decompress_file(fobj, count):
+def decompress_file(fobj: BinaryIO, count: int) -> np.ndarray:
     foff = fobj.tell() # record the incoming byte offest
     flen = fobj.seek(0, os.SEEK_END) # get total file size
     fobj.seek(foff) # go back to the incoming offset
