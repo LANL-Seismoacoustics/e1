@@ -66,10 +66,15 @@ def decompress(buff, count):
         Error code from decompression library.
 
     """
-    flen = len(buff) # number of bytes in buffer
-    w = np.frombuffer(buff, dtype=np.int32) # read them all into 4byte integers
+    inbyte = len(buff) # number of bytes in buffer
+
+    in_array = np.frombuffer(buff, dtype=np.int32) # read them all into 4byte integers
+    in_ptr = in_array.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
+
     # make an empty array to hold decompressed values
-    Y = np.zeros(count, dtype=np.int32, order='C')
+    out_array = np.zeros(count, dtype=np.int32, order='C')
+    out_ptr = out_array.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
+
     # decompress into output array
     # int32_t e_decomp(uint32_t *in,
     #                  int32_t *out,
@@ -77,20 +82,13 @@ def decompress(buff, count):
     #                  int32_t inbyte, 
     #                  int32_t out0,
     #                  int32_t outsamp) {
-    status = libecomp.e_decomp(
-        w.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
-        Y.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
-        count,
-        flen,
-        0,
-        count
-    )
+    status = libecomp.e_decomp(in_ptr, out_ptr, count, inbyte, 0, count)
 
     if status != ECStatus.EC_SUCCESS:
         msg = "e1 decompression error: {} {!r}".format(E_MESSAGES[status], ECStatus(status))
         raise Exception(msg)
 
-    return Y
+    return out_array
 
 
 libecomp.e_comp.argtypes = [
@@ -131,7 +129,6 @@ def compress(data):
 
     block_flag = 1
 
-    # int32_t e_comp(int32_t *in, uint32_t *out, int32_t insamp, int32_t *outbytes, char datatype[], int32_t block_flag)
     # int32_t e_comp(int32_t *in, 
     #                uint32_t *out, 
     #                int32_t insamp, 
