@@ -111,8 +111,20 @@ def compress(data):
         Compressed data.
 
     """
-    # out_c = ctypes.create_string_buffer(data.nbytes) # null-terminated mutable bytes buffer, max possible size (no compression)
-    out = np.zeros(len(data), dtype='>u4', order='C') # big-endian unsigned int32 buffer array
+    in_array = data
+    insamp = len(data)
+
+    in_ptr = in_array.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
+
+    out_array = np.zeros(len(data), dtype='>u4', order='C') # big-endian unsigned int32 buffer array
+    out_ptr = out_array.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
+
+    outbytes = 0
+    outbytes_ptr = ctypes.pointer(ctypes.c_int32(outbytes))
+
+    datatype = ctypes.create_string_buffer(b'e1', 2)
+
+    block_flag = 1
 
     # int32_t e_comp(int32_t *in, uint32_t *out, int32_t insamp, int32_t *outbytes, char datatype[], int32_t block_flag)
     # int32_t e_comp(int32_t *in, 
@@ -122,27 +134,15 @@ def compress(data):
     #                char datatype[], 
     #                int32_t block_flag)
 
-    # bytes_out_p = ctypes.POINTER(ctypes.c_uint32)() # null pointer to uint32
-    outbytes_p = ctypes.POINTER(ctypes.c_int32)(ctypes.c_int32(0)) # initialize output bytes pointer
-    datatype = ctypes.create_string_buffer(b'e1', 2)
-    status = libecomp.e_comp(
-        data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
-        out.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
-        # bytes_out.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
-        # ctypes.cast(bytes_out, ctypes.POINTER(ctypes.c_uint32)),
-        ctypes.c_int32(len(data)),
-        outbytes_p,
-        datatype,
-        1
-    )
+    status = libecomp.e_comp(in_ptr, out_ptr, insamp, outbytes_ptr, datatype, block_flag)
+
     if status != ECStatus.EC_SUCCESS:
         msg = "e1 decompression error: {} {!r}".format(E_MESSAGES[status], ECStatus(status))
         raise Exception(msg)
 
-    print(out)
-    print(outbytes_p.contents.value)
-    return out.tobytes()[:outbytes_p.contents.value]
+    outbytes = outbytes_ptr.contents.value
 
+    return out_array.tobytes()[:outbytes]
 
 def decompress_file(fobj, count):
     foff = fobj.tell() # record the incoming byte offest
