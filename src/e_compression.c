@@ -787,7 +787,10 @@ int32_t e_comp(int32_t *in,
       for (k = 0; k < didsamp; k++) {
         *out++ = htonl(*(uint32_t *)in++);
       }
-      *outbytes += bufbytes;
+      uint16_t block_bytes = (uint16_t)(sizeof(uint32_t)*(out - pout));
+      ((uint16_t *)pout)[0] = htons(block_bytes);
+      ((uint16_t *)pout)[1] = htons((uint16_t)didsamp);
+      *outbytes += block_bytes;
       return EC_SUCCESS;
     }
 
@@ -962,7 +965,10 @@ int32_t e_comp(int32_t *in,
         *outbytes += sizeof(uint32_t) * (out - pout);
         return EC_SUCCESS;
       }
-      *outbytes += bufbytes;
+      uint16_t block_bytes = (uint16_t)(sizeof(uint32_t)*(out - pout));
+      ((uint16_t *)pout)[0] = htons(block_bytes);
+      ((uint16_t *)pout)[1] = htons((uint16_t)didsamp);
+      *outbytes += block_bytes;
       return EC_SUCCESS;
     }
 
