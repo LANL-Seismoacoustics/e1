@@ -10,6 +10,8 @@ import importlib.machinery
 
 import numpy as np
 
+EC_SHORT_END = 1
+BLOCK_SAMP = 510  # samples per 2048‑byte block for 'e1'
 
 ext = importlib.machinery.EXTENSION_SUFFIXES[0]
 libecomp = ctypes.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
@@ -96,55 +98,43 @@ libecomp.e_comp.argtypes = [
     ctypes.POINTER(ctypes.c_uint32), # uint32_t *out
     ctypes.c_int32, # int32_t insamp
     ctypes.POINTER(ctypes.c_int32), # int32_t *outbytes
-    ctypes.c_char*2, # char datatype[]
+    ctypes.c_char_p, # pointer to NUL‑terminated string
     ctypes.c_int32 # int32_t block_flag
 ]
 libecomp.e_comp.restype = ctypes.c_int32  # int32_t
 
-def compress(data: np.ndarray) -> bytes:
-    """ Compress an int32 array. 
 
-    Parameters
-    ----------
-    data : numpy.ndarray (rank 1) of type int32
-
-    Returns
-    -------
-    compressed : bytes
-        Compressed data.
-
-    """
-    in_array = data
+def compress(data: np.ndarray, datatype=b"e1"):
+    parts = []
+    i = 0
     insamp = len(data)
 
-    in_ptr = in_array.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
+    while i + BLOCK_SAMP < insamp:  # all guaranteed‑full blocks
+        parts.append(_compress_one_block(data[i:i+BLOCK_SAMP],
+                                         datatype, block_flag=0))
+        i += BLOCK_SAMP
 
-    out_array = np.zeros(len(data), dtype='>u4', order='C') # big-endian unsigned int32 buffer array
-    out_ptr = out_array.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
+    # last (possibly short) block, set SHORT_END
+    parts.append(_compress_one_block(data[i:], datatype,
+                                     block_flag=EC_SHORT_END))
+    return b"".join(parts)
 
-    outbytes = 0
-    outbytes_ptr = ctypes.pointer(ctypes.c_int32(outbytes))
 
-    datatype = ctypes.create_string_buffer(b'e1', 2)
-
-    block_flag = 1
-
-    # int32_t e_comp(int32_t *in, 
-    #                uint32_t *out, 
-    #                int32_t insamp, 
-    #                int32_t *outbytes, 
-    #                char datatype[], 
-    #                int32_t block_flag)
-
-    status = libecomp.e_comp(in_ptr, out_ptr, insamp, outbytes_ptr, datatype, block_flag)
-
-    if status != ECStatus.EC_SUCCESS:
-        msg = "e1 decompression error: {} {!r}".format(E_MESSAGES[status], ECStatus(status))
-        raise Exception(msg)
-
-    outbytes = outbytes_ptr.contents.value
-
-    return out_array.tobytes()[:outbytes]
+def _compress_one_block(chunk, datatype, block_flag):
+    out_bytes_est = 2048  # worst case
+    out_buffer = np.zeros(out_bytes_est//4, dtype=np.uint32)
+    out_bytes = ctypes.c_int32()
+    status = libecomp.e_comp(
+        chunk.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)),
+        out_buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
+        ctypes.c_int32(len(chunk)),
+        ctypes.byref(out_bytes),
+        datatype,
+        ctypes.c_int32(block_flag),
+    )
+    if status:
+        raise RuntimeError(f"e1 compression error {status}")
+    return out_buffer[: out_bytes.value//4].tobytes()
 
 
 def decompress_file(fobj: BinaryIO, count: int) -> np.ndarray:
