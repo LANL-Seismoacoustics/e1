@@ -1,41 +1,113 @@
 import io
+import pytest
+import struct
+
 import numpy as np
+
 import e1
 
-# e1 byte string for 400 bytes = 5 x 20 samples x 4 bytes per sample
-e1byts = (b'\x00H\x00<\x02\x00\x00\xc3\x93[\x8b\xed\xc0\x08L\xf9\xcc^\xc1\x04\xcf'
-          b'\xd8\xf8\x9a\xc4\xdb1r\xce\x84A\xe6\xcdC\xba\xf1\xc4\x82\xf4\xfc\xc2'
-          b'\xdf\xc5\x8d\xc0D\x00\x8b\xcd\x98\x8d\x89\xce\x1e\xc8\x97\xcd\xdeCz'
-          b'\xc0@\xc3w\xc0%Am\xff\xff\xff\xdb\x00H\x00<\x02\x00\x02\n\xd1\xfd\xdeO'
-          b'\xfe\x00\x00\r\xcfc}\xe5\xc0!Cw\xcf\xc5\x8c\x82\xcc\xe2\x08}\xc1\xff>'
-          b'\x7f\xcf\xa6\xbc\xeb\xc0c\x08\xf1\xcd!\x88\x15\xce\xdf\x87\xf0\xc1dr'
-          b'\xf8\xc0\xe0\xc1\xf6\xcd\x16\x0b\x9a\xcc]\xc9\x8e\x80_\xb3\xdb\x00H'
-          b'\x00<\x02\x00\x01\xdd\xd2G\xd7\xe0\t\xff\x0f\xf5\xc3\x81\xfd}\xc0>{"'
-          b'\xc2`\x89v\xcf\xbd=\x15\xc0\xa2\xd2\x00\xcef=\xea\xc0|?\x11\xc1`9x'
-          b'\xce\x9e\xc2w\xcf\xa7\nr\xcb;\xc3z\xc0b\x04\x8d\xc1C\xbfd\xbe\xd0/\xfc'
-          b'\x00\xc0\x00\xb4\x02\xff\xff\xfa\x11\xf3\xa1\x90\x9f\xcf\xcc\x04\xc3E'
-          b'\x82x\xcc\x83L|\xc0A\xbd\xec\xce\x9a\x82*\xc2<\x84\x8d\xce\x9f{\xe6'
-          b'\xcf\'Ky\xcbz\xc2{\xc0\x1dy\x85\xc1\x07\x81\xee\xc1\xe3v\xf6\xc3\xc1'
-          b'\xc4\x85\xce\xbf6\x01\xcf\x1e\xff\t\xc3\x03\x07\xe1\xcc>v\x87\xc0dJr'
-          b'\xcf\xdau\x9f\xcf\x81\x90z\xc1#\xbfs\xce\xe0\x89\x8c\xce\x81<\xf0\xcf'
-          b'\xa1\x03\xf9\xc0\xbdr\x8a\xc1\xbd\xf6\x80\xc3C\x04\xe8\xce\x07B\x9e'
-          b'\xcf\x94\xbc\x91\xc1\xfc<\x17\xc0\xbd\xc3\x08\xc1#>w\xc1@\xfe\x83\xce'
-          b'\x9e?\xf7\xc0\xe1w\x07\xc0\x98\xbd\xf3\xce\xc4\x83\x8f\xce\xfd\x00\xf1'
-          b'\xcf\x83\xfbv\xc06\x80\x87\xcd\xa5J\x84\xc2?;!\xc4e\x80\x85')
+RNG2 = np.random.default_rng(20250716)
 
-expected = np.array([309, 332, 336, 340, 377, 439, 494, 519, 539, 561, 587,
-                     611, 606, 586, 592, 636, 660, 654, 634, 602], dtype=np.int32)
 
-count = len(expected)
+# e1 compressed data, 56 bytes (big endian)
+# wfid 200318583
+e1bytes = (b'\x008\x00(\x01\x00\x01\x9c\x90\x10\x14Ax:$\xb0\xee\x97\x9a$\xc5\x1c'
+           b'\xc2-\x05\xf5}T \x0bP\x00\xc9^V\xbd\xc6S:\xa0ww \xd1\xce\xbf\xa6R'
+           b'\x81`\xf0M\xf0\x00\x00\x06')
+# zero bytes 4x larger than data, to test padding behavior
+padding_bytes = bytes(len(e1bytes) * 4)
 
-e1file = io.BytesIO(e1byts)
+
+# corresponding data for the 56 compressed e1 bytes above, 160 bytes uncompressed
+e1data = np.array([257, 262, 327, 295, 248, 323, 352, 261, 210, 246, 286, 273,
+                   277, 322, 345, 260, 217, 349, 351, 263, 263, 209, 202, 247,
+                   308, 358, 306, 295, 327, 292, 221, 234, 291, 210, 165, 247,
+                   269, 329, 406, 412], dtype=np.int32)
+
+count = len(e1data)
+
+
+def rand(n):
+    return RNG2.integers(-8_000_000, 8_000_000, n, dtype=np.int32)
+
+
+CMP_DATASETS = {
+    "< block": rand(20),
+    "= block": rand(510),
+    "tiny_tail": rand(515),
+    "1.5 block": rand(765),
+    "fixed": e1data
+}
+
+
+@pytest.fixture
+def e1file():
+    with io.BytesIO(e1bytes) as f:
+        yield f
+
+
+@pytest.fixture
+def e1file_padded():
+    with io.BytesIO(e1bytes + padding_bytes) as f:
+        yield f
 
 
 def test_decompress():
-    observed = e1.decompress(e1byts, count)
-    np.testing.assert_array_equal(observed, expected)
+    observed = e1.decompress(e1bytes, count)
+    np.testing.assert_array_equal(observed, e1data)
+
+    # still works when extra bytes are present
+    observed = e1.decompress(e1bytes + padding_bytes, count)
+    np.testing.assert_array_equal(observed, e1data)
 
 
-def test_decompress_file():
+def test_decompress_file(e1file, e1file_padded):
     observed = e1.decompress_file(e1file, count)
-    np.testing.assert_array_equal(observed, expected)
+    np.testing.assert_array_equal(observed, e1data)
+
+    # still works when file contains extra bytes
+    observed = e1.decompress_file(e1file_padded, count)
+    np.testing.assert_array_equal(observed, e1data)
+
+
+def _analyse_blocks(buf: bytes):
+    """Return list [(hdr_len, used_nonzero, hdr_samp), ...] for every
+    block.
+    """
+    out = []
+    off = 0
+    while off < len(buf):
+        hdr_len, hdr_samp = struct.unpack_from(">HH", buf, off)
+        blk_bytes = buf[off: off + hdr_len]
+        used = 4 + len(blk_bytes[4:].rstrip(b"\x00"))
+        out.append((hdr_len, used, hdr_samp))
+        off += hdr_len
+    return out
+
+
+def _compress_roundtrip_case(arr, label):
+    comp = e1.compress(arr)
+    decomp = e1.decompress(comp, len(arr))
+    np.testing.assert_array_equal(decomp, arr)
+
+    blocks = _analyse_blocks(comp)
+    print(f"\n{label:10}  total={len(comp)} B  blocks={len(blocks)}")
+    for i, (hdr, used, samp) in enumerate(blocks):
+        stat = "PASS" if hdr == used else "FAIL"
+        print(f"  blk {i:<2} samp={samp:<4} hdr_len={hdr:<5} "
+              f"used={used:<5} {stat}")
+
+
+def test_compress_roundtrip():
+    """Run round-trip test on 5 different array sizes.
+    """
+    for label, arr in CMP_DATASETS.items():
+        _compress_roundtrip_case(arr, label)
+
+
+if __name__ == "__main__":
+    # TODO: Add decompress and other tests
+    print("### Running compression tests... ###")
+    test_compress_roundtrip()
+    print("### ...All compression tests passed ###")
+    print("All tests passed.")
