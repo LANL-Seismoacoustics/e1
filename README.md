@@ -51,3 +51,15 @@ with open(file_name, 'rb') as f:
 
 data = decompress(byts, nsamples)
 ```
+
+### Compress a NumPy array
+
+```python
+import e1
+
+e1bytes = e1.compress(my_array)
+
+compression_ratio = my_array.nbytes / len(e1bytes)
+print(f"Compression ratio: {compression_ratio}")
+
+```
