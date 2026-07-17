@@ -3,11 +3,10 @@
 """
 e1: Python support for the e1 compression format.
 
-
+This package provides Python support for the e1 seismic compression format,
+including core compression/decompression functions and optional Zarr v3 codec.
 """
-from setuptools import setup, Extension
-
-# from numpy.distutils.core import setup, Extension
+from setuptools import setup, Extension, find_packages
 
 with open('README.md') as readme:
     # https://dustingram.com/articles/2018/03/16/markdown-descriptions-on-pypi
@@ -23,17 +22,17 @@ setup(name='e1',
       author='Jonathan MacCarthy',
       author_email='jkmacc@lanl.gov',
       url='https://github.com/LANL-seismoacoustics/e1',
-      download_url='https://github.com/LANL-seismoacoustics/e1/tarball/0.1.0',
+      download_url='https://github.com/LANL-seismoacoustics/e1/tarball/0.3.0',
       keywords=['seismology', 'geophysics', 'compression', 'zarr'],
       install_requires=['numpy'],
       extras_require={
           'zarr': ['zarr>=3.0.0'],
       },
-      py_modules=['e1', 'e1_zarr_codec'],
+      packages=find_packages(),
       ext_modules=[Extension('_libe1', ['src/e_compression.c'])],
       entry_points={
           'zarr.codecs': [
-              'e1=e1_zarr_codec:E1Codec',
+              'e1=e1.codec:E1Codec',
           ],
       },
       license='MIT',
