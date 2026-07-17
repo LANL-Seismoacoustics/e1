@@ -80,7 +80,7 @@ pip install e1[zarr]
 import zarr
 import numpy as np
 from zarr import config
-from e1_zarr_codec import E1Codec
+from e1 import E1Codec
 
 # IMPORTANT: Set concurrency to 1 for thread safety
 config.set({'async.concurrency': 1})
@@ -113,4 +113,4 @@ config.set({'async.concurrency': 1})  # Required for safe multi-chunk arrays
 
 This serializes chunk operations to prevent data corruption. The codec will warn you if it detects an unsafe configuration.
 
-See the [codec documentation](e1_zarr_codec.py) for detailed thread-safety information.
+See the [codec documentation](e1/codec.py) for detailed thread-safety information.

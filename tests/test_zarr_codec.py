@@ -32,7 +32,7 @@ import e1
 
 if ZARR_AVAILABLE:
     try:
-        from e1_zarr_codec import E1Codec
+        from e1 import E1Codec
     except ImportError:
         E1Codec = None
 
