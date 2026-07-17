@@ -1,6 +1,10 @@
 
 # CHANGELOG
 
+## 0.3.0
+
+* Added an optional Zarr compression codec, `E1Codec`.
+
 ## 0.2.0
 
 * compression add by @samualchodur!
