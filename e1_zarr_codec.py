@@ -11,16 +11,16 @@ import warnings
 
 import numpy as np
 import zarr
-from zarr.abc.codec import BytesBytesCodec
+from zarr.abc.codec import ArrayBytesCodec
 from zarr.core.array_spec import ArraySpec
 from zarr.core.buffer import Buffer, default_buffer_prototype
 
 import e1
 
 
-class E1Codec(BytesBytesCodec):
+class E1Codec(ArrayBytesCodec):
     """
-    Zarr v3 bytes-to-bytes codec for e1 compression.
+    Zarr v3 array-to-bytes codec for e1 compression.
     
     e1 is a variable-length compression algorithm for int32 seismic data.
     The C library handles endianness internally, producing big-endian
@@ -44,7 +44,7 @@ class E1Codec(BytesBytesCodec):
     ...     shape=(1000,),
     ...     chunks=(100,),  # Multiple chunks OK now
     ...     dtype='int32',
-    ...     codecs=[BytesCodec(), E1Codec()]
+    ...     codecs=[E1Codec()]  # No BytesCodec needed!
     ... )
     
     This is the recommended approach as it:
@@ -61,7 +61,7 @@ class E1Codec(BytesBytesCodec):
     ...     shape=(1000,),
     ...     chunks=(1000,),  # chunk_shape == shape
     ...     dtype='int32',
-    ...     codecs=[BytesCodec(), E1Codec()]
+    ...     codecs=[E1Codec()]  # No BytesCodec needed!
     ... )
     
     This works because there's nothing to process concurrently, but:
@@ -76,7 +76,7 @@ class E1Codec(BytesBytesCodec):
     ...     shape=(1000,),
     ...     chunks=(100,),  # 10 chunks + concurrency=10 → corruption!
     ...     dtype='int32',
-    ...     codecs=[BytesCodec(), E1Codec()]
+    ...     codecs=[E1Codec()]  # Will cause corruption!
     ... )
     >>> # This will cause random data corruption!
     
@@ -191,7 +191,6 @@ class E1Codec(BytesBytesCodec):
     >>> import zarr
     >>> import numpy as np
     >>> from zarr import config
-    >>> from zarr.codecs import BytesCodec
     >>> from e1_zarr_codec import E1Codec
     >>> 
     >>> # Disable concurrency for thread safety
@@ -204,7 +203,7 @@ class E1Codec(BytesBytesCodec):
     ...     chunks=(100,),
     ...     dtype='int32',
     ...     store=store,
-    ...     codecs=[BytesCodec(), E1Codec()]
+    ...     codecs=[E1Codec()]  # No BytesCodec needed!
     ... )
     >>> 
     >>> # Write and read data
@@ -387,14 +386,14 @@ class E1Codec(BytesBytesCodec):
             "The compressed size cannot be determined without encoding the data."
         )
     
-    def _encode_sync(self, chunk_bytes: Buffer, chunk_spec: ArraySpec) -> Buffer:
+    def _encode_sync(self, chunk_array, chunk_spec: ArraySpec) -> Buffer:
         """
         Synchronous encoding (compression) implementation.
         
         Parameters
         ----------
-        chunk_bytes : Buffer
-            Input buffer containing int32 data
+        chunk_array : NDBuffer
+            Input array-like buffer containing int32 data
         chunk_spec : ArraySpec
             Chunk specification
             
@@ -403,22 +402,16 @@ class E1Codec(BytesBytesCodec):
         Buffer
             Compressed data with 8-byte header
         """
-        # Convert buffer to bytes
-        input_bytes = chunk_bytes.to_bytes()
+        # Convert NDBuffer to numpy array
+        # The as_numpy_array() method returns a numpy array view
+        np_array = chunk_array.as_numpy_array()
         
-        # Validate input is multiple of 4 bytes (int32)
-        if len(input_bytes) % 4 != 0:
-            raise ValueError(
-                f"Input buffer size {len(input_bytes)} is not a multiple "
-                f"of 4 (int32 size)"
-            )
+        # Ensure array is contiguous (make copy if needed)
+        if not np_array.flags.c_contiguous:
+            np_array = np.ascontiguousarray(np_array)
         
-        # Convert to numpy array (keep native byte order)
-        # If input bytes are from a big-endian array, we need to handle conversion
-        data = np.frombuffer(input_bytes, dtype=np.int32)
-        
-        # Ensure data is in native byte order for e1.compress
-        # frombuffer always interprets bytes in native order, which is what we want
+        # Flatten multi-dimensional arrays
+        data = np_array.ravel()
         sample_count = len(data)
         
         # Compress using e1 (handles endianness internally)
@@ -435,14 +428,14 @@ class E1Codec(BytesBytesCodec):
         # Return as Buffer
         return chunk_spec.prototype.buffer.from_bytes(output_bytes)
     
-    async def _encode_single(self, chunk_bytes: Buffer, chunk_spec: ArraySpec) -> Buffer:
+    async def _encode_single(self, chunk_array, chunk_spec: ArraySpec) -> Buffer:
         """
         Async wrapper for encoding a single chunk.
         
         Parameters
         ----------
-        chunk_bytes : Buffer
-            Input buffer
+        chunk_array : NDBuffer
+            Input array-like buffer
         chunk_spec : ArraySpec
             Chunk specification
             
@@ -451,9 +444,9 @@ class E1Codec(BytesBytesCodec):
         Buffer
             Compressed buffer
         """
-        return await asyncio.to_thread(self._encode_sync, chunk_bytes, chunk_spec)
+        return await asyncio.to_thread(self._encode_sync, chunk_array, chunk_spec)
     
-    def _decode_sync(self, chunk_bytes: Buffer, chunk_spec: ArraySpec) -> Buffer:
+    def _decode_sync(self, chunk_bytes: Buffer, chunk_spec: ArraySpec) -> np.ndarray:
         """
         Synchronous decoding (decompression) implementation.
         
@@ -466,8 +459,8 @@ class E1Codec(BytesBytesCodec):
             
         Returns
         -------
-        Buffer
-            Decompressed int32 data
+        np.ndarray
+            Decompressed int32 array
         """
         # Convert buffer to bytes
         input_bytes = chunk_bytes.to_bytes()
@@ -500,11 +493,10 @@ class E1Codec(BytesBytesCodec):
         if decompressed.dtype != np.dtype('int32'):
             decompressed = decompressed.astype(np.int32)
         
-        # Return as Buffer
-        output_bytes = decompressed.tobytes()
-        return chunk_spec.prototype.buffer.from_bytes(output_bytes)
+        # Reshape to chunk shape and return
+        return decompressed.reshape(chunk_spec.shape)
     
-    async def _decode_single(self, chunk_bytes: Buffer, chunk_spec: ArraySpec) -> Buffer:
+    async def _decode_single(self, chunk_bytes: Buffer, chunk_spec: ArraySpec) -> np.ndarray:
         """
         Async wrapper for decoding a single chunk.
         
@@ -517,7 +509,7 @@ class E1Codec(BytesBytesCodec):
             
         Returns
         -------
-        Buffer
-            Decompressed buffer
+        np.ndarray
+            Decompressed array
         """
         return await asyncio.to_thread(self._decode_sync, chunk_bytes, chunk_spec)

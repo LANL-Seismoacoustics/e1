@@ -17,8 +17,7 @@ import pytest
 # Check if zarr is available
 try:
     import zarr
-    from zarr.abc.codec import BytesBytesCodec
-    from zarr.codecs import BytesCodec
+    from zarr.abc.codec import ArrayBytesCodec
     ZARR_AVAILABLE = True
 except ImportError:
     ZARR_AVAILABLE = False
@@ -85,7 +84,7 @@ def test_codec_instantiation():
     """Test creating an E1Codec instance."""
     codec = E1Codec()
     assert codec is not None
-    assert isinstance(codec, BytesBytesCodec)
+    assert isinstance(codec, ArrayBytesCodec)
 
 
 def test_codec_id():
@@ -130,7 +129,7 @@ def test_create_zarr_array_with_e1_codec():
         chunks=(100,),
         dtype='int32',
         store=store,
-        codecs=[BytesCodec(), E1Codec()]
+        codecs=[E1Codec()]
     )
     
     assert array is not None
@@ -147,7 +146,7 @@ def test_zarr_array_single_chunk():
         chunks=(1000,),  # Single chunk
         dtype='int32',
         store=store,
-        codecs=[BytesCodec(), E1Codec()]
+        codecs=[E1Codec()]
     )
     
     assert array.shape == (1000,)
@@ -164,7 +163,7 @@ def test_wrong_dtype_raises_error():
             chunks=(100,),
             dtype='float32',  # Wrong type
             store=store,
-            codecs=[BytesCodec(), E1Codec()]
+            codecs=[E1Codec()]
         )
 
 
@@ -181,7 +180,7 @@ def test_write_read_1d_array():
         chunks=(100,),  # 10 chunks
         dtype='int32',
         store=store,
-        codecs=[BytesCodec(), E1Codec()]
+        codecs=[E1Codec()]
     )
     
     # Write data
@@ -202,7 +201,7 @@ def test_write_read_2d_array():
         chunks=(50, 25),
         dtype='int32',
         store=store,
-        codecs=[BytesCodec(), E1Codec()]
+        codecs=[E1Codec()]
     )
     
     # Write data
@@ -223,7 +222,7 @@ def test_write_read_3d_array():
         chunks=(10, 15, 20),
         dtype='int32',
         store=store,
-        codecs=[BytesCodec(), E1Codec()]
+        codecs=[E1Codec()]
     )
     
     # Write data
@@ -259,7 +258,7 @@ def test_roundtrip_various_sizes(size):
         chunks=(size,),  # Single chunk for simplicity
         dtype='int32',
         store=store,
-        codecs=[BytesCodec(), E1Codec()]
+        codecs=[E1Codec()]
     )
     
     # Generate random int32 data
@@ -293,7 +292,7 @@ def test_validation_warns_on_unsafe_config():
                 chunks=(50, 50),  # Multiple chunks
                 dtype='int32',
                 store=store,
-                codecs=[BytesCodec(), E1Codec()]
+                codecs=[E1Codec()]
             )
             
             # Should have E1 warnings
@@ -322,7 +321,7 @@ def test_validation_no_warning_on_safe_config():
             chunks=(50, 50),  # Multiple chunks
             dtype='int32',
             store=store,
-            codecs=[BytesCodec(), E1Codec()]
+            codecs=[E1Codec()]
         )
         
         # Should not have E1 warnings
@@ -346,7 +345,7 @@ def test_validation_no_warning_single_chunk():
                 chunks=(1000,),  # Single chunk
                 dtype='int32',
                 store=store,
-                codecs=[BytesCodec(), E1Codec()]
+                codecs=[E1Codec()]
             )
             
             # Should not warn (single chunk is safe)
