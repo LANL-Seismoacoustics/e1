@@ -13,9 +13,10 @@ import numpy as np
 import zarr
 from zarr.abc.codec import ArrayBytesCodec
 from zarr.core.array_spec import ArraySpec
-from zarr.core.buffer import Buffer, default_buffer_prototype
+from zarr.core.buffer import Buffer, NDBuffer, default_buffer_prototype
 
 import e1
+from e1 import E1DecompressionError, E1ChecksumError, E1ValidationError
 
 
 class E1Codec(ArrayBytesCodec):
@@ -386,7 +387,7 @@ class E1Codec(ArrayBytesCodec):
             "The compressed size cannot be determined without encoding the data."
         )
     
-    def _encode_sync(self, chunk_array, chunk_spec: ArraySpec) -> Buffer:
+    def _encode_sync(self, chunk_array: NDBuffer, chunk_spec: ArraySpec) -> Buffer:
         """
         Synchronous encoding (compression) implementation.
         
@@ -401,25 +402,25 @@ class E1Codec(ArrayBytesCodec):
         -------
         Buffer
             Compressed data with 8-byte header
+            
+        Raises
+        ------
+        E1ValidationError
+            If data validation fails (from e1 library)
+        E1CompressionError
+            If e1 compression fails (from e1 library)
         """
-        # Convert NDBuffer to numpy array
-        # The as_numpy_array() method returns a numpy array view
-        np_array = chunk_array.as_numpy_array()
+        # Convert NDBuffer to numpy array and ensure C-contiguous in one step
+        # This avoids double-copy: asarray with order='C' ensures contiguity
+        np_array = np.asarray(chunk_array.as_numpy_array(), order='C')
         
-        # Ensure array is contiguous (make copy if needed)
-        if not np_array.flags.c_contiguous:
-            np_array = np.ascontiguousarray(np_array)
-        
-        # Flatten multi-dimensional arrays
+        # Flatten multi-dimensional arrays (guaranteed to be a view since C-contiguous)
         data = np_array.ravel()
         sample_count = len(data)
         
-        # Compress using e1 (handles endianness internally)
+        # Compress using e1 (handles validation, endianness, and errors internally)
         # The C library produces big-endian compressed output
-        try:
-            compressed = e1.compress(data, datatype=b"e1")
-        except Exception as e:
-            raise RuntimeError(f"e1 compression failed: {e}") from e
+        compressed = e1.compress(data, datatype=b"e1")
         
         # Prepend 8-byte sample count (big-endian int64)
         header = struct.pack('>Q', sample_count)
@@ -428,14 +429,14 @@ class E1Codec(ArrayBytesCodec):
         # Return as Buffer
         return chunk_spec.prototype.buffer.from_bytes(output_bytes)
     
-    async def _encode_single(self, chunk_array, chunk_spec: ArraySpec) -> Buffer:
+    async def _encode_single(self, chunk_array: NDBuffer, chunk_spec: ArraySpec) -> Buffer:
         """
         Async wrapper for encoding a single chunk.
         
         Parameters
         ----------
         chunk_array : NDBuffer
-            Input array-like buffer
+            Input array-like buffer containing int32 data
         chunk_spec : ArraySpec
             Chunk specification
             
@@ -461,6 +462,17 @@ class E1Codec(ArrayBytesCodec):
         -------
         np.ndarray
             Decompressed int32 array
+            
+        Raises
+        ------
+        ValueError
+            If input is too small, or if decompressed size doesn't match expected chunk size
+        E1ChecksumError
+            If decompression checksum validation fails (from e1 library)
+        E1DecompressionError
+            If e1 decompression fails for other reasons (from e1 library)
+        E1ValidationError
+            If input validation fails (from e1 library)
         """
         # Convert buffer to bytes
         input_bytes = chunk_bytes.to_bytes()
@@ -476,22 +488,17 @@ class E1Codec(ArrayBytesCodec):
         sample_count = struct.unpack('>Q', input_bytes[:8])[0]
         compressed_data = input_bytes[8:]
         
-        # Decompress using e1 (returns native byte order)
-        try:
-            decompressed = e1.decompress(compressed_data, sample_count)
-        except Exception as e:
-            raise RuntimeError(f"e1 decompression failed: {e}") from e
-        
-        # Validate output size
-        if len(decompressed) != sample_count:
-            raise RuntimeError(
-                f"Decompression size mismatch: expected {sample_count}, "
-                f"got {len(decompressed)}"
+        # Validate that sample count matches expected chunk shape (Zarr-specific check)
+        expected_size = int(np.prod(chunk_spec.shape))
+        if sample_count != expected_size:
+            raise ValueError(
+                f"Compressed data sample count ({sample_count}) does not match "
+                f"expected chunk size ({expected_size}) for shape {chunk_spec.shape}"
             )
         
-        # Convert to standard int32 if needed
-        if decompressed.dtype != np.dtype('int32'):
-            decompressed = decompressed.astype(np.int32)
+        # Decompress using e1 (handles validation and typed errors)
+        # e1.decompress now raises E1DecompressionError, E1ChecksumError, or E1ValidationError
+        decompressed = e1.decompress(compressed_data, sample_count)
         
         # Reshape to chunk shape and return
         return decompressed.reshape(chunk_spec.shape)

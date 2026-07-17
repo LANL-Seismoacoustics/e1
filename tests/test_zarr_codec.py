@@ -71,6 +71,12 @@ def set_safe_concurrency():
         yield
 
 
+@pytest.fixture
+def memory_store():
+    """Provide a fresh MemoryStore for each test."""
+    return zarr.storage.MemoryStore()
+
+
 # =============================================================================
 # Codec Instantiation and Configuration Tests
 # =============================================================================
@@ -120,15 +126,13 @@ def test_config_roundtrip():
 # Zarr Array Creation Tests
 # =============================================================================
 
-def test_create_zarr_array_with_e1_codec():
+def test_create_zarr_array_with_e1_codec(memory_store):
     """Test creating a Zarr array with E1Codec."""
-    store = zarr.storage.MemoryStore()
-    
     array = zarr.create(
         shape=(1000,),
         chunks=(100,),
         dtype='int32',
-        store=store,
+        store=memory_store,
         codecs=[E1Codec()]
     )
     
@@ -137,15 +141,13 @@ def test_create_zarr_array_with_e1_codec():
     assert array.dtype == np.int32
 
 
-def test_zarr_array_single_chunk():
+def test_zarr_array_single_chunk(memory_store):
     """Test creating Zarr array with single chunk (always safe)."""
-    store = zarr.storage.MemoryStore()
-    
     array = zarr.create(
         shape=(1000,),
         chunks=(1000,),  # Single chunk
         dtype='int32',
-        store=store,
+        store=memory_store,
         codecs=[E1Codec()]
     )
     
@@ -153,16 +155,14 @@ def test_zarr_array_single_chunk():
     assert array.chunks == (1000,)
 
 
-def test_wrong_dtype_raises_error():
+def test_wrong_dtype_raises_error(memory_store):
     """Test that non-int32 dtype raises ValueError."""
-    store = zarr.storage.MemoryStore()
-    
     with pytest.raises(ValueError, match="only supports int32"):
         zarr.create(
             shape=(100,),
             chunks=(100,),
             dtype='float32',  # Wrong type
-            store=store,
+            store=memory_store,
             codecs=[E1Codec()]
         )
 
@@ -171,15 +171,13 @@ def test_wrong_dtype_raises_error():
 # Data Read/Write Tests
 # =============================================================================
 
-def test_write_read_1d_array():
+def test_write_read_1d_array(memory_store):
     """Test writing and reading 1D data through Zarr array with multiple chunks."""
-    store = zarr.storage.MemoryStore()
-    
     array = zarr.create(
         shape=(1000,),
         chunks=(100,),  # 10 chunks
         dtype='int32',
-        store=store,
+        store=memory_store,
         codecs=[E1Codec()]
     )
     
@@ -192,15 +190,13 @@ def test_write_read_1d_array():
     np.testing.assert_array_equal(retrieved, data)
 
 
-def test_write_read_2d_array():
+def test_write_read_2d_array(memory_store):
     """Test 2D Zarr array with E1Codec."""
-    store = zarr.storage.MemoryStore()
-    
     array = zarr.create(
         shape=(100, 50),
         chunks=(50, 25),
         dtype='int32',
-        store=store,
+        store=memory_store,
         codecs=[E1Codec()]
     )
     
@@ -213,15 +209,13 @@ def test_write_read_2d_array():
     np.testing.assert_array_equal(retrieved, data)
 
 
-def test_write_read_3d_array():
+def test_write_read_3d_array(memory_store):
     """Test 3D Zarr array with E1Codec."""
-    store = zarr.storage.MemoryStore()
-    
     array = zarr.create(
         shape=(20, 30, 40),
         chunks=(10, 15, 20),
         dtype='int32',
-        store=store,
+        store=memory_store,
         codecs=[E1Codec()]
     )
     
@@ -244,20 +238,18 @@ def test_write_read_3d_array():
     1020,   # 2 blocks
     2000,   # multiple blocks
 ])
-def test_roundtrip_various_sizes(size):
+def test_roundtrip_various_sizes(size, memory_store):
     """Test encode/decode roundtrip with various array sizes via Zarr.
     
     Tests different data sizes to verify codec handles e1's internal block
     structure correctly (e1 uses 510-sample blocks). Single chunk per test
     to isolate size-related behavior from multi-chunk concurrency issues.
     """
-    store = zarr.storage.MemoryStore()
-    
     array = zarr.create(
         shape=(size,),
         chunks=(size,),  # Single chunk for simplicity
         dtype='int32',
-        store=store,
+        store=memory_store,
         codecs=[E1Codec()]
     )
     
@@ -272,11 +264,122 @@ def test_roundtrip_various_sizes(size):
     np.testing.assert_array_equal(retrieved, data)
 
 
+def test_empty_array(memory_store):
+    """Test handling of empty arrays (edge case)."""
+    array = zarr.create(
+        shape=(0,),
+        chunks=(100,),  # Chunk size larger than array
+        dtype='int32',
+        store=memory_store,
+        codecs=[E1Codec()]
+    )
+    
+    # Empty array should work
+    data = np.array([], dtype=np.int32)
+    array[:] = data
+    retrieved = array[:]
+    
+    assert len(retrieved) == 0
+    np.testing.assert_array_equal(retrieved, data)
+
+
+def test_empty_multidimensional_array(memory_store):
+    """Test handling of multi-dimensional arrays with zero size in one dimension."""
+    array = zarr.create(
+        shape=(10, 0),
+        chunks=(10, 10),
+        dtype='int32',
+        store=memory_store,
+        codecs=[E1Codec()]
+    )
+    
+    # Empty array should work
+    data = np.array([], dtype=np.int32).reshape(10, 0)
+    array[:, :] = data
+    retrieved = array[:, :]
+    
+    assert retrieved.shape == (10, 0)
+    np.testing.assert_array_equal(retrieved, data)
+
+
+def test_fortran_order_array(memory_store):
+    """Test handling of Fortran-ordered (non-C-contiguous) arrays."""
+    array = zarr.create(
+        shape=(100, 50),
+        chunks=(100, 50),
+        dtype='int32',
+        store=memory_store,
+        codecs=[E1Codec()]
+    )
+    
+    # Create Fortran-ordered data
+    data = np.asfortranarray(rand_int32((100, 50)))
+    assert not data.flags.c_contiguous
+    assert data.flags.f_contiguous
+    
+    # Codec should handle conversion
+    array[:, :] = data
+    retrieved = array[:, :]
+    
+    np.testing.assert_array_equal(retrieved, data)
+
+
+def test_corrupted_data_handling(memory_store):
+    """Test that corrupted compressed data raises appropriate errors."""
+    # This test verifies error handling through the full Zarr pipeline
+    # by simulating corrupted data scenarios
+    from zarr.core.buffer import default_buffer_prototype
+    import struct
+    
+    # Create array and write valid data
+    array = zarr.create(
+        shape=(100,),
+        chunks=(100,),
+        dtype='int32',
+        store=memory_store,
+        codecs=[E1Codec()]
+    )
+    
+    data = rand_int32(100)
+    array[:] = data
+    
+    # Verify normal operation works
+    retrieved = array[:]
+    np.testing.assert_array_equal(retrieved, data)
+    
+    # Now corrupt the stored data by writing garbage directly to storage
+    # Get the chunk key
+    chunk_key = 'c/0'
+    buf_proto = default_buffer_prototype()
+    
+    # Test 1: Write truncated data (too small)
+    memory_store.set_sync(chunk_key, buf_proto.buffer.from_bytes(b"short"))
+    
+    with pytest.raises(Exception):  # Should raise some error
+        _ = array[:]
+    
+    # Test 2: Write corrupted but properly sized header + garbage
+    header = struct.pack('>Q', 100)  # Valid header claiming 100 samples
+    corrupted = header + b"\x00" * 100  # Garbage compressed data
+    memory_store.set_sync(chunk_key, buf_proto.buffer.from_bytes(corrupted))
+    
+    with pytest.raises((e1.E1DecompressionError, e1.E1ChecksumError)):
+        _ = array[:]
+    
+    # Test 3: Valid header but wrong sample count
+    header_wrong = struct.pack('>Q', 50)  # Claims 50 but array expects 100
+    valid_50 = e1.compress(rand_int32(50), datatype=b"e1")
+    memory_store.set_sync(chunk_key, buf_proto.buffer.from_bytes(header_wrong + valid_50))
+    
+    with pytest.raises(ValueError, match="does not match expected chunk size"):
+        _ = array[:]
+
+
 # =============================================================================
 # Configuration Warning Tests
 # =============================================================================
 
-def test_validation_warns_on_unsafe_config():
+def test_validation_warns_on_unsafe_config(memory_store):
     """Test that validation warns when concurrency > 1 with multiple chunks."""
     # Temporarily set unsafe config
     original = zarr.config.get('async.concurrency')
@@ -286,12 +389,11 @@ def test_validation_warns_on_unsafe_config():
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             
-            store = zarr.storage.MemoryStore()
             array = zarr.create(
                 shape=(100, 100),
                 chunks=(50, 50),  # Multiple chunks
                 dtype='int32',
-                store=store,
+                store=memory_store,
                 codecs=[E1Codec()]
             )
             
@@ -308,19 +410,18 @@ def test_validation_warns_on_unsafe_config():
         zarr.config.set({'async.concurrency': original})
 
 
-def test_validation_no_warning_on_safe_config():
+def test_validation_no_warning_on_safe_config(memory_store):
     """Test that validation doesn't warn when concurrency = 1."""
     zarr.config.set({'async.concurrency': 1})
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         
-        store = zarr.storage.MemoryStore()
         array = zarr.create(
             shape=(100, 100),
             chunks=(50, 50),  # Multiple chunks
             dtype='int32',
-            store=store,
+            store=memory_store,
             codecs=[E1Codec()]
         )
         
@@ -329,7 +430,7 @@ def test_validation_no_warning_on_safe_config():
         assert len(e1_warnings) == 0, "Should not warn with safe configuration"
 
 
-def test_validation_no_warning_single_chunk():
+def test_validation_no_warning_single_chunk(memory_store):
     """Test that validation doesn't warn for single chunk arrays."""
     # Set unsafe concurrency
     original = zarr.config.get('async.concurrency')
@@ -339,12 +440,11 @@ def test_validation_no_warning_single_chunk():
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             
-            store = zarr.storage.MemoryStore()
             array = zarr.create(
                 shape=(1000,),
                 chunks=(1000,),  # Single chunk
                 dtype='int32',
-                store=store,
+                store=memory_store,
                 codecs=[E1Codec()]
             )
             
