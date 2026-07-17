@@ -16,7 +16,7 @@ with open('README.md') as readme:
 doclines = __doc__.split("\n")
 
 setup(name='e1',
-      version='0.2.1',
+      version='0.3.0',
       description='Python support for the e1 compression format.',
       long_description=long_description,
       long_description_content_type="text/markdown", # setuptools >= 38.6.0
@@ -24,10 +24,18 @@ setup(name='e1',
       author_email='jkmacc@lanl.gov',
       url='https://github.com/LANL-seismoacoustics/e1',
       download_url='https://github.com/LANL-seismoacoustics/e1/tarball/0.1.0',
-      keywords=['seismology', 'geophysics'],
+      keywords=['seismology', 'geophysics', 'compression', 'zarr'],
       install_requires=['numpy'],
-      py_modules=['e1'],
+      extras_require={
+          'zarr': ['zarr>=3.0.0'],
+      },
+      py_modules=['e1', 'e1_zarr_codec'],
       ext_modules=[Extension('_libe1', ['src/e_compression.c'])],
+      entry_points={
+          'zarr.codecs': [
+              'e1=e1_zarr_codec:E1Codec',
+          ],
+      },
       license='MIT',
       platforms=['Mac OS X', 'Linux/Unix'],
 )
