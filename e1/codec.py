@@ -1,8 +1,13 @@
-"""
-e1_zarr_codec: Zarr v3 bytes-to-bytes codec for e1 compression.
+"""e1.codec: Zarr v3 bytes-to-bytes codec for e1 compression.
 
 This module provides a Zarr v3 codec for the e1 seismic compression format.
 e1 is a variable-length compression algorithm for int32 data.
+
+The E1Codec class can be imported from the top-level e1 package:
+    from e1 import E1Codec
+
+or from this submodule:
+    from e1.codec import E1Codec
 """
 import asyncio
 import struct
@@ -15,8 +20,8 @@ from zarr.abc.codec import ArrayBytesCodec
 from zarr.core.array_spec import ArraySpec
 from zarr.core.buffer import Buffer, NDBuffer, default_buffer_prototype
 
-import e1
-from e1 import E1DecompressionError, E1ChecksumError, E1ValidationError
+from e1 import core as e1
+from e1.core import E1DecompressionError, E1ChecksumError, E1ValidationError
 
 
 class E1Codec(ArrayBytesCodec):
@@ -192,7 +197,7 @@ class E1Codec(ArrayBytesCodec):
     >>> import zarr
     >>> import numpy as np
     >>> from zarr import config
-    >>> from e1_zarr_codec import E1Codec
+    >>> from e1 import E1Codec
     >>> 
     >>> # Disable concurrency for thread safety
     >>> config.set({'async.concurrency': 1})

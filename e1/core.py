@@ -4,7 +4,8 @@
 from typing import List, BinaryIO
 import ctypes
 from enum import IntEnum
-import os
+import io
+from pathlib import Path
 import importlib.machinery
 
 import numpy as np
@@ -49,7 +50,9 @@ BLOCK_SAMP = 510  # samples per 2048‑byte block for 'e1'
 EC_MAX_BUFFER = 100000  # Maximum samples (from C library)
 
 ext = importlib.machinery.EXTENSION_SUFFIXES[0]
-libecomp = ctypes.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
+# Look for _libe1 in parent directory (where it's installed)
+lib_path = Path(__file__).parent.parent / f'_libe1{ext}'
+libecomp = ctypes.CDLL(str(lib_path))
 
 class ECStatus(IntEnum):
     EC_SUCCESS = 0
@@ -279,7 +282,7 @@ def decompress_file(fobj: BinaryIO, count: int) -> np.ndarray:
         If decompression fails.
     """
     foff = fobj.tell() # record the incoming byte offest
-    flen = fobj.seek(0, os.SEEK_END) # get total file size
+    flen = fobj.seek(0, io.SEEK_END) # get total file size
     fobj.seek(foff) # go back to the incoming offset
     flen -= foff # number of bytes left in file
     # read 5 times the number of expected samples, or the remaining bytes in file
@@ -331,8 +334,9 @@ def e_compression(DATAFILE, BYTEOFFSET, NUM):
     libecomp.e_decomp.restype = ctypes.c_int
 
     # open file, query size, jump to offset
-    f = open(DATAFILE, 'rb')
-    flen = os.stat(DATAFILE).st_size
+    filepath = Path(DATAFILE)
+    f = open(filepath, 'rb')
+    flen = filepath.stat().st_size
     if flen < BYTEOFFSET:
         raise ValueError("BYTEOFFSET exceeds file size.")
     f.seek(BYTEOFFSET)
