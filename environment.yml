@@ -1,7 +1,9 @@
 name: e1
 channels:
 - defaults
+- conda-forge
 dependencies:
 - python=3
 - numpy
 - pytest
+- zarr>=3.0.0
