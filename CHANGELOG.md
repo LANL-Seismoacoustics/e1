@@ -7,13 +7,12 @@
   - Moved `e1.py` → `e1/core.py` (internal)
   - Moved `e1_zarr_codec.py` → `e1/codec.py`
   - Created `e1/__init__.py` that exports all public APIs
+  - Moved C extension `_libe1` into e1 package directory (`e1._libe1`)
   - All existing imports continue to work: `import e1`, `from e1 import compress, decompress`, etc.
   - `E1Codec` now imported as: `from e1 import E1Codec` (previously `from e1_zarr_codec import E1Codec`)
   - Updated setup.py to use `find_packages()` instead of `py_modules`
+  - Replaced `os.path` with `pathlib.Path` for modern Python standards
   - Updated all documentation, docstrings, and tests
-
-## 0.3.0
-
 * Added an optional Zarr compression codec, `E1Codec`.
 
 ## 0.2.0
