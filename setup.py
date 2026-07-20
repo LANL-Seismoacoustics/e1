@@ -29,7 +29,7 @@ setup(name='e1',
           'zarr': ['zarr>=3.0.0'],
       },
       packages=find_packages(),
-      ext_modules=[Extension('_libe1', ['src/e_compression.c'])],
+      ext_modules=[Extension('e1._libe1', ['src/e_compression.c'])],
       entry_points={
           'zarr.codecs': [
               'e1=e1.codec:E1Codec',

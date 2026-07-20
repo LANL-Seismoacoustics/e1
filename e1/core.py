@@ -50,8 +50,8 @@ BLOCK_SAMP = 510  # samples per 2048‑byte block for 'e1'
 EC_MAX_BUFFER = 100000  # Maximum samples (from C library)
 
 ext = importlib.machinery.EXTENSION_SUFFIXES[0]
-# Look for _libe1 in parent directory (where it's installed)
-lib_path = Path(__file__).parent.parent / f'_libe1{ext}'
+# Look for _libe1 in the same directory (e1 package)
+lib_path = Path(__file__).parent / f'_libe1{ext}'
 libecomp = ctypes.CDLL(str(lib_path))
 
 class ECStatus(IntEnum):
