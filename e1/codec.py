@@ -421,18 +421,13 @@ class E1Codec(ArrayBytesCodec):
         
         # Flatten multi-dimensional arrays (guaranteed to be a view since C-contiguous)
         data = np_array.ravel()
-        sample_count = len(data)
         
         # Compress using e1 (handles validation, endianness, and errors internally)
         # The C library produces big-endian compressed output
         compressed = e1.compress(data, datatype=b"e1")
         
-        # Prepend 8-byte sample count (big-endian int64)
-        header = struct.pack('>Q', sample_count)
-        output_bytes = header + compressed
-        
-        # Return as Buffer
-        return chunk_spec.prototype.buffer.from_bytes(output_bytes)
+        # Return as Buffer (no extra header - on-disk format matches original e1)
+        return chunk_spec.prototype.buffer.from_bytes(compressed)
     
     async def _encode_single(self, chunk_array: NDBuffer, chunk_spec: ArraySpec) -> Buffer:
         """
@@ -479,32 +474,17 @@ class E1Codec(ArrayBytesCodec):
         E1ValidationError
             If input validation fails (from e1 library)
         """
-        # Convert buffer to bytes
+        # Convert buffer to bytes (this is the raw e1 compressed byte stream)
         input_bytes = chunk_bytes.to_bytes()
         
-        # Validate minimum size (8-byte header)
-        if len(input_bytes) < 8:
-            raise ValueError(
-                f"Input buffer too small: {len(input_bytes)} bytes "
-                f"(minimum 8 for header)"
-            )
-        
-        # Extract sample count from header
-        sample_count = struct.unpack('>Q', input_bytes[:8])[0]
-        compressed_data = input_bytes[8:]
-        
-        # Validate that sample count matches expected chunk shape (Zarr-specific check)
+        # Calculate expected sample count from chunk shape
         expected_size = int(np.prod(chunk_spec.shape))
-        if sample_count != expected_size:
-            raise ValueError(
-                f"Compressed data sample count ({sample_count}) does not match "
-                f"expected chunk size ({expected_size}) for shape {chunk_spec.shape}"
-            )
         
         # Decompress using e1 (handles validation and typed errors)
-        # e1.decompress now raises E1DecompressionError, E1ChecksumError, or E1ValidationError
-        decompressed = e1.decompress(compressed_data, sample_count)
+        # e1.decompress expects the raw compressed bytes and the total sample count
+        decompressed = e1.decompress(input_bytes, expected_size)
         
+        # The decompressed array should be 1D with length equal to expected_size
         # Reshape to chunk shape and return
         return decompressed.reshape(chunk_spec.shape)
     
