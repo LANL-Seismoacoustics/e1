@@ -47,7 +47,7 @@ class E1ValidationError(E1Error):
 EC_FULL_END = 0
 EC_SHORT_END = 1
 BLOCK_SAMP = 510  # samples per 2048‑byte block for 'e1'
-EC_MAX_BUFFER = 100000  # Maximum samples (from C library)
+
 
 ext = importlib.machinery.EXTENSION_SUFFIXES[0]
 # Look for _libe1 in the same directory (e1 package)
@@ -103,7 +103,7 @@ def decompress(buff: bytes, count: int) -> np.ndarray:
     Raises
     ------
     E1ValidationError
-        If count is negative or exceeds EC_MAX_BUFFER, or if buff is too small.
+        If count is negative, or if buff is too small.
     E1ChecksumError
         If decompression checksum validation fails (data corrupted).
     E1DecompressionError
@@ -113,11 +113,6 @@ def decompress(buff: bytes, count: int) -> np.ndarray:
     # Validate count parameter
     if count < 0:
         raise E1ValidationError(f"count must be non-negative, got {count}")
-    
-    if count > EC_MAX_BUFFER:
-        raise E1ValidationError(
-            f"count {count} exceeds maximum buffer size {EC_MAX_BUFFER}"
-        )
     
     # Validate buffer size
     if len(buff) < 1:
@@ -194,7 +189,7 @@ def compress(data: np.ndarray, datatype=b"e1"):
     Raises
     ------
     E1ValidationError
-        If data is not int32, empty, or exceeds maximum size.
+        If data is not int32 or empty.
     E1CompressionError
         If compression fails.
     """
@@ -208,11 +203,6 @@ def compress(data: np.ndarray, datatype=b"e1"):
     # Validate size
     if len(data) == 0:
         raise E1ValidationError("Cannot compress empty array")
-    
-    if len(data) > EC_MAX_BUFFER:
-        raise E1ValidationError(
-            f"Data size {len(data)} exceeds e1 maximum buffer size {EC_MAX_BUFFER}"
-        )
     
     # Ensure C-contiguous for C library
     if not data.flags.c_contiguous:

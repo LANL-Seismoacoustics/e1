@@ -135,12 +135,6 @@ def test_compress_empty_array():
         e1.compress(data)
 
 
-def test_compress_exceeds_max_buffer():
-    """e1.compress should reject arrays larger than EC_MAX_BUFFER."""
-    huge_data = np.zeros(e1.EC_MAX_BUFFER + 1, dtype=np.int32)
-    with pytest.raises(e1.E1ValidationError, match="exceeds.*maximum"):
-        e1.compress(huge_data)
-
 
 def test_decompress_negative_count():
     """e1.decompress should reject negative sample_count."""
@@ -148,10 +142,7 @@ def test_decompress_negative_count():
         e1.decompress(b"data", -1)
 
 
-def test_decompress_exceeds_max_buffer():
-    """e1.decompress should reject count larger than EC_MAX_BUFFER."""
-    with pytest.raises(e1.E1ValidationError, match="exceeds.*maximum"):
-        e1.decompress(b"data" * 1000, e1.EC_MAX_BUFFER + 1)
+
 
 
 def test_decompress_empty_buffer():

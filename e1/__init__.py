@@ -25,7 +25,6 @@ Constants
 - EC_FULL_END: Block end marker for full blocks
 - EC_SHORT_END: Block end marker for short blocks
 - BLOCK_SAMP: Samples per block (510)
-- EC_MAX_BUFFER: Maximum samples (100000)
 - ECStatus: Enum of status codes
 - E_MESSAGES: Status code messages
 
@@ -84,7 +83,6 @@ from e1.core import (
     EC_FULL_END,
     EC_SHORT_END,
     BLOCK_SAMP,
-    EC_MAX_BUFFER,
     ECStatus,
     E_MESSAGES,
     
@@ -98,55 +96,9 @@ from e1.core import (
 # Import codec for Zarr integration (optional dependency)
 try:
     from e1.codec import E1Codec
-    __all__ = [
-        # Exceptions
-        'E1Error',
-        'E1CompressionError',
-        'E1DecompressionError',
-        'E1ChecksumError',
-        'E1ValidationError',
-        
-        # Constants
-        'EC_FULL_END',
-        'EC_SHORT_END',
-        'BLOCK_SAMP',
-        'EC_MAX_BUFFER',
-        'ECStatus',
-        'E_MESSAGES',
-        
-        # Functions
-        'compress',
-        'decompress',
-        'decompress_file',
-        'e_compression',
-        
-        # Codec
-        'E1Codec',
-    ]
 except ImportError:
     # zarr not installed, codec not available
-    __all__ = [
-        # Exceptions
-        'E1Error',
-        'E1CompressionError',
-        'E1DecompressionError',
-        'E1ChecksumError',
-        'E1ValidationError',
-        
-        # Constants
-        'EC_FULL_END',
-        'EC_SHORT_END',
-        'BLOCK_SAMP',
-        'EC_MAX_BUFFER',
-        'ECStatus',
-        'E_MESSAGES',
-        
-        # Functions
-        'compress',
-        'decompress',
-        'decompress_file',
-        'e_compression',
-    ]
+    pass
 
 # Package metadata
 __version__ = '0.3.0'
