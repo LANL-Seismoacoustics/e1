@@ -111,3 +111,62 @@ if __name__ == "__main__":
     test_compress_roundtrip()
     print("### ...All compression tests passed ###")
     print("All tests passed.")
+
+
+# =============================================================================
+# Validation Tests (new exception types)
+# =============================================================================
+
+def test_compress_wrong_dtype():
+    """e1.compress should reject non-int32 data."""
+    data = np.array([1, 2, 3], dtype=np.float32)
+    with pytest.raises(e1.E1ValidationError, match="requires int32"):
+        e1.compress(data)
+    
+    data = np.array([1, 2, 3], dtype=np.int64)
+    with pytest.raises(e1.E1ValidationError, match="requires int32"):
+        e1.compress(data)
+
+
+def test_compress_empty_array():
+    """e1.compress should reject empty arrays."""
+    data = np.array([], dtype=np.int32)
+    with pytest.raises(e1.E1ValidationError, match="Cannot compress empty"):
+        e1.compress(data)
+
+
+
+def test_decompress_negative_count():
+    """e1.decompress should reject negative sample_count."""
+    with pytest.raises(e1.E1ValidationError, match="non-negative"):
+        e1.decompress(b"data", -1)
+
+
+
+
+
+def test_decompress_empty_buffer():
+    """e1.decompress should reject empty input buffer."""
+    with pytest.raises(e1.E1ValidationError, match="too small"):
+        e1.decompress(b"", 10)
+
+
+def test_decompress_corrupted_data():
+    """e1.decompress should raise clear error for corrupted data."""
+    garbage = b"\x00" * 100
+    with pytest.raises(e1.E1DecompressionError):
+        e1.decompress(garbage, 10)
+
+
+def test_decompress_checksum_error():
+    """e1.decompress should raise E1ChecksumError for checksum failures."""
+    # Create valid compressed data
+    data = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    compressed = e1.compress(data)
+    
+    # Corrupt the last bytes (checksum area)
+    corrupted = compressed[:-4] + b"\xFF\xFF\xFF\xFF"
+    
+    # Should raise checksum error
+    with pytest.raises(e1.E1ChecksumError, match="check value"):
+        e1.decompress(corrupted, len(data))

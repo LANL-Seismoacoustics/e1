@@ -1,22 +1,58 @@
-"""
-e1 : Python support for the e1 compression format
+"""e1 : Python support for the e1 compression format
 
 """
 from typing import List, BinaryIO
 import ctypes
 from enum import IntEnum
-import os
+import io
+from pathlib import Path
 import importlib.machinery
 
 import numpy as np
 
 
+# =============================================================================
+# Custom Exceptions
+# =============================================================================
+
+class E1Error(Exception):
+    """Base exception for e1 library errors."""
+    pass
+
+
+class E1CompressionError(E1Error):
+    """Error during compression."""
+    pass
+
+
+class E1DecompressionError(E1Error):
+    """Error during decompression."""
+    pass
+
+
+class E1ChecksumError(E1DecompressionError):
+    """Checksum validation failed - data is corrupted."""
+    pass
+
+
+class E1ValidationError(E1Error):
+    """Input validation failed."""
+    pass
+
+
+# =============================================================================
+# Constants and C Library Setup
+# =============================================================================
+
 EC_FULL_END = 0
 EC_SHORT_END = 1
 BLOCK_SAMP = 510  # samples per 2048‑byte block for 'e1'
 
+
 ext = importlib.machinery.EXTENSION_SUFFIXES[0]
-libecomp = ctypes.CDLL(os.path.dirname(__file__) + os.path.sep + '_libe1' + ext)
+# Look for _libe1 in the same directory (e1 package)
+lib_path = Path(__file__).parent / f'_libe1{ext}'
+libecomp = ctypes.CDLL(str(lib_path))
 
 class ECStatus(IntEnum):
     EC_SUCCESS = 0
@@ -66,10 +102,25 @@ def decompress(buff: bytes, count: int) -> np.ndarray:
 
     Raises
     ------
-    Exception
-        Error code from decompression library.
+    E1ValidationError
+        If count is negative, or if buff is too small.
+    E1ChecksumError
+        If decompression checksum validation fails (data corrupted).
+    E1DecompressionError
+        If decompression fails for other reasons.
 
     """
+    # Validate count parameter
+    if count < 0:
+        raise E1ValidationError(f"count must be non-negative, got {count}")
+    
+    # Validate buffer size
+    if len(buff) < 1:
+        raise E1ValidationError(
+            f"Compressed data too small ({len(buff)} bytes). "
+            f"Minimum valid e1 data is at least 1 byte."
+        )
+    
     inbyte = len(buff) # number of bytes in buffer
 
     in_array = np.frombuffer(buff, dtype=np.int32) # read them all into 4byte integers
@@ -89,8 +140,22 @@ def decompress(buff: bytes, count: int) -> np.ndarray:
     status = libecomp.e_decomp(in_ptr, out_ptr, count, inbyte, 0, count)
 
     if status != ECStatus.EC_SUCCESS:
-        msg = "e1 decompression error: {} {!r}".format(E_MESSAGES[status], ECStatus(status))
-        raise Exception(msg)
+        msg = f"e1 decompression error: {E_MESSAGES[status]} {ECStatus(status)!r}"
+        
+        # Raise specific exception for checksum errors
+        if status == ECStatus.EC_CHECK_ERROR:
+            raise E1ChecksumError(
+                f"{msg}. Data is corrupted or not valid e1 format."
+            )
+        else:
+            raise E1DecompressionError(msg)
+    
+    # Validate output size matches expected
+    if len(out_array) != count:
+        raise E1DecompressionError(
+            f"Decompression size mismatch: expected {count} samples, "
+            f"got {len(out_array)}. Data may be corrupted."
+        )
 
     return out_array
 
@@ -107,6 +172,42 @@ libecomp.e_comp.restype = ctypes.c_int32  # int32_t
 
 
 def compress(data: np.ndarray, datatype=b"e1"):
+    """Compress int32 data using e1 compression.
+    
+    Parameters
+    ----------
+    data : np.ndarray
+        Input array of int32 data.
+    datatype : bytes, optional
+        Compression type identifier (default: b"e1").
+    
+    Returns
+    -------
+    bytes
+        Compressed data.
+    
+    Raises
+    ------
+    E1ValidationError
+        If data is not int32 or empty.
+    E1CompressionError
+        If compression fails.
+    """
+    # Validate dtype
+    if data.dtype != np.int32:
+        raise E1ValidationError(
+            f"e1.compress() requires int32 data, got {data.dtype}. "
+            f"Use data.astype(np.int32) to convert."
+        )
+    
+    # Validate size
+    if len(data) == 0:
+        raise E1ValidationError("Cannot compress empty array")
+    
+    # Ensure C-contiguous for C library
+    if not data.flags.c_contiguous:
+        data = np.ascontiguousarray(data)
+    
     parts = []
     i = 0
     insamp = len(data)
@@ -123,6 +224,13 @@ def compress(data: np.ndarray, datatype=b"e1"):
 
 
 def _compress_one_block(chunk, datatype, block_flag):
+    """Compress a single block of data.
+    
+    Raises
+    ------
+    E1CompressionError
+        If compression fails.
+    """
     out_bytes_est = 2048  # worst case
     out_buffer = np.zeros(out_bytes_est//4, dtype=np.uint32)
     out_bytes = ctypes.c_int32()
@@ -135,13 +243,36 @@ def _compress_one_block(chunk, datatype, block_flag):
         ctypes.c_int32(block_flag),
     )
     if status:
-        raise RuntimeError(f"e1 compression error {status}")
+        raise E1CompressionError(
+            f"e1 compression failed with status {status}"
+        )
     return out_buffer[: out_bytes.value//4].tobytes()
 
 
 def decompress_file(fobj: BinaryIO, count: int) -> np.ndarray:
+    """Decompress data from a file object.
+    
+    Parameters
+    ----------
+    fobj : file-like
+        File object positioned at start of compressed data.
+    count : int
+        Number of expected samples.
+    
+    Returns
+    -------
+    np.ndarray
+        Decompressed int32 data.
+    
+    Raises
+    ------
+    E1ValidationError
+        If count is invalid.
+    E1DecompressionError
+        If decompression fails.
+    """
     foff = fobj.tell() # record the incoming byte offest
-    flen = fobj.seek(0, os.SEEK_END) # get total file size
+    flen = fobj.seek(0, io.SEEK_END) # get total file size
     fobj.seek(foff) # go back to the incoming offset
     flen -= foff # number of bytes left in file
     # read 5 times the number of expected samples, or the remaining bytes in file
@@ -193,8 +324,9 @@ def e_compression(DATAFILE, BYTEOFFSET, NUM):
     libecomp.e_decomp.restype = ctypes.c_int
 
     # open file, query size, jump to offset
-    f = open(DATAFILE, 'rb')
-    flen = os.stat(DATAFILE).st_size
+    filepath = Path(DATAFILE)
+    f = open(filepath, 'rb')
+    flen = filepath.stat().st_size
     if flen < BYTEOFFSET:
         raise ValueError("BYTEOFFSET exceeds file size.")
     f.seek(BYTEOFFSET)
